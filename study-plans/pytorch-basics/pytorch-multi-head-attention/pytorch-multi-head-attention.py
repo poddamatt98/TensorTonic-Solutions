@@ -18,17 +18,13 @@ class MultiHeadAttention(nn.Module):
         """
         out_buffer = []
 
-        Q = Q @ self.W_q
-        K = K @ self.W_k
-        V = V @ self.W_v
+        batch, seq_len, _ = Q.shape
 
-        for h in range(self.num_heads):
-            start = h* self.head_dim
-            end = (h+1) * self.head_dim
-            Q_h = Q[:, :, start:end]
-            K_h = K[:, :, start:end]
-            V_h = V[:, :, start:end]
+        Q = (Q @ self.W_q).view(batch, seq_len, self.num_heads, self.head_dim).transpose(-3, -2)
+        K = (K @ self.W_k).view(batch, seq_len, self.num_heads, self.head_dim).transpose(-3, -2)
+        V = (V @ self.W_v).view(batch, seq_len, self.num_heads, self.head_dim).transpose(-3, -2)
 
-            out_h = torch.softmax((Q_h @ K_h.transpose(-2, -1)) / torch.sqrt(torch.tensor(self.head_dim)), dim=-1) @ V_h
-            out_buffer.append(out_h)
-        return torch.concat(out_buffer, dim=-1) @ self.W_o
+        norm = torch.sqrt(torch.tensor(self.head_dim))
+
+        out = torch.softmax(Q @ K.transpose(-2, -1) / norm, dim=-1) @ V
+        return out.transpose(-3, -2).reshape(batch, seq_len, self.d_model) @ self.W_o 
